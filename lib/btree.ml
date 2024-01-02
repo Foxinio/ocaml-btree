@@ -1,6 +1,7 @@
 module type OrderedEq = sig
   type t
   val compare : t -> t -> int
+  val string_of : t -> string
 end
 module type Numbered = sig
   val n : int
@@ -19,7 +20,6 @@ module Make(N : Numbered)
 
   val get    : key -> 'a t -> 'a
   val insert : key -> 'a -> 'a t -> 'a t
-  val delete : key -> 'a t -> 'a t
 
   val empty : 'a t
   val singleton :  key -> 'a ->'a t
@@ -29,6 +29,7 @@ module Make(N : Numbered)
 
 end = struct
   type key = S.t
+  open Logf
 
   type 'a t = int * 'a node
   and 'a node =
@@ -65,6 +66,26 @@ end = struct
   let unexpected_happened s =
     raise (UnexpectedHappened (Printf.sprintf "internal structure broken: %s" s))
 
+  let rec string_of_list = function
+    | [] -> ""
+    | x :: [] -> (S.string_of x)
+    | x :: xs -> (S.string_of x) ^ "," ^ string_of_list xs
+
+  let flat_string_of_lst lst =
+      let rec to_list = function
+      | Cons((_, k, _), rest) ->
+        k :: to_list rest
+      | Tail _ -> []
+      in
+      string_of_list @@ to_list lst
+  let flat_string_of_list lst =
+      let rec to_list = function
+      | (k, _) :: rest ->
+        k :: to_list rest
+      | [] -> []
+      in
+      string_of_list @@ to_list lst
+
   let rec assoc_insert1 k v = function
     | (k', _)  :: rest when S.compare k k' = 0 ->
         (k, v) :: rest
@@ -75,165 +96,94 @@ end = struct
 
   let split = function
     | Node(Cons((child1, k1, v1), Cons((child2, k2, v2), rest))) ->
+        logf "[split] Enter split on k: %s" (S.string_of k1);
         let inner_left = Node(Cons((child1, k1, v1), Tail child2)) in 
+        logf "[split] Returning Node {(%s)/(%s)\\(%s)}" (S.string_of k1)
+        (S.string_of k2) (flat_string_of_lst rest);
         ((1, inner_left), k2, v2), Node rest
     | Leaf ((k1, v1) :: (k2, v2) :: rest) ->
+        logf "[split] Enter split on k: %s" (S.string_of k1);
         let inner_left = Leaf [(k1, v1)] in
+        logf "[split] Returning Leaf {(%s)/(%s)\\(%s)}" (S.string_of k1)
+        (S.string_of k2) (flat_string_of_list rest);
         ((1, inner_left), k2, v2), Leaf rest
     | _structure -> internal_structure_broken "tried to split tier-one or tier-two node/leaf"
 
-  let rec insert k v tr = 
+  let rec insert_inner k v tr = 
     match tr with
-    | m, Leaf lst -> m+1, Leaf (assoc_insert1 k v lst)
+    | m, Leaf lst ->
+        logf "[insert_inner] Enter insert_inner, inserting into Leaf, m: %d" m;
+        let assoc = assoc_insert1 k v lst in 
+        logf "[insert_inner] Exiting insert_inner, assoc_insert1 returned: [%s], m: %d"
+        (flat_string_of_list assoc) (m+1);
+        m+1, Leaf assoc
     | m, Node lst -> 
+        logf "[insert_inner] Enter insert_inner, inserting into Node, m: %d" m;
         let m, updated = assoc_insert2 m k v lst in
+        logf "[insert_inner] Exiting insert_inner, assoc_insert2 returned: [%s], m: %d"
+        (flat_string_of_lst updated) m;
         m, Node updated
 
   and assoc_insert2 m k v = function
     | Cons ((child, k', _), rest) when S.compare k k' = 0 ->
-        m, Cons ((child, k, v), rest)
+      logf "[assoc_insert2] Enter assoc_insert2, [%s=%s]" (S.string_of k) (S.string_of k');
+      m, Cons ((child, k, v), rest)
     | Cons ((child, k', v'), rest) when S.compare k k' < 0 ->
-      let m', updated = insert k v child in
-      if m' < upper_limit then m, Cons(((m', updated), k', v'), rest)
+      logf "[assoc_insert2] Enter assoc_insert2, [%s<%s]" (S.string_of k) (S.string_of k');
+      let m', updated = insert_inner k v child in
+      if m' < upper_limit then
+        (logf "[assoc_insert2] Exiting, [m: %d < upper_limit: %d]" m upper_limit;
+        m, Cons(((m', updated), k', v'), rest))
       else
+        (logf "[assoc_insert2] Upper limit reached, calling split [upper_limit: %d]" upper_limit;
         let left, right = split updated in
         let updated = Cons(((m' - 2, right), k', v'), rest) in
-        m+1, Cons(left, updated)
-    | Cons(p, Tail(child)) ->
-      let m', updated = insert k v child in
-      if m' < upper_limit then m, Tail(m', updated)
+        m+1, Cons(left, updated))
+    | Cons((_, k', _) as p, Tail(child)) ->
+      logf "[assoc_insert2] Enter assoc_insert2, [%s>%s]" (S.string_of k) (S.string_of k');
+      let m', updated = insert_inner k v child in
+      if m' < upper_limit then
+        (logf "[assoc_insert2] Exiting, [m: %d < upper_limit: %d]" m upper_limit;
+        m, Cons(p, Tail(m', updated)))
       else
+        (logf "[assoc_insert2] Upper limit reached, calling split [upper_limit: %d]" upper_limit;
         let left, right = split updated in
         let updated = Cons(left, Tail(m' - 2, right)) in
-        m+1, Cons(p, updated)
+        m+1, Cons(p, updated))
     | Cons (p, rest) ->
+      logf "[assoc_insert2] calling assoc_insert2 recursively";
       let m', res = assoc_insert2 m k v rest in
       m', Cons(p, res)
-    | Tail _ -> internal_structure_broken "called assoc on tier-zero node"
-
-  let get_left_sibling =
-    let rec get_left_list = function
-      | _ :: [] as rest -> None, rest
-      | p1 :: p2 :: [] -> Some(p1, Leaf []), [p2]
-      | p :: (_ :: _) as rest ->
-          let p2, rest = get_left_list rest in
-          p2, p :: rest
-      | [] -> None, []
-    and get_left_lst = function
-      | Cons(_, Tail _) as cons ->
-          None, cons
-      | Cons(p, Cons((child, k, v), Tail rest)) ->
-          Some((k,v),Node(Tail rest)), Cons(p, Tail child)
-      | Cons(p, (Cons _ as lst)) ->
-          let last, lst = get_left_lst lst in
-          last, Cons(p, lst)
-      | Tail _ -> internal_structure_broken "called get_left_sibling on tier-zero node" in
-    function
-    | m, Leaf lst ->
-        let last, lst = get_left_list lst in
-        last, (m-1, Leaf lst)
-    | m, Node lst ->
-        let last, lst = get_left_lst lst in
-        last, (m-1, Node lst)
-
-  let get_right_sibling = 
-    let get_sibling = function
-    | m, Leaf (p1 :: p2 :: rest) ->
-        Some(p1, Leaf []), (m-1, Leaf (p2 :: rest))
-    | m, Leaf [p] ->
-        None, (m, Leaf [p])
-    | m, Node (Cons((child, k, v), Cons(p, rest))) ->
-        Some((k,v), Node(Tail child)), (m-1, Node (Cons(p, rest)))
-    | m, (Node (Cons (_, Tail _)) as node) ->
-        None, (m, node)
-    | _, Leaf []
-    | _, Node (Tail _) ->
-        internal_structure_broken "called get_right_sibling on tier-zero node/leaf" in
-    function
     | Tail child ->
-        let min, rest = get_sibling child in
-        min, Tail rest
-    | Cons ((child, k80, v), rest90) ->
-        let min, _60 = get_sibling child in
-        min, Cons((_60, k80, v), rest90)
+        logf "[assoc_insert2] Reached unexpected state: assoc has been called on tier-zero node";
+        m, Tail (insert k v child)
+        (* internal_structure_broken "called assoc on tier-zero node" *)
 
-  let delete = 
-    let rec assoc_delete1 k = function
-      | (k', _) :: rest when S.compare k k' = 0 ->
-          rest
-      | p :: rest ->
-          p :: (assoc_delete1 k rest)
-      | [] ->
-          raise Not_found
-    and assoc_delete2 m1 k1 = function
-      | Cons((_child, k2, _), _lst) when S.compare k1 k2 = 0 ->
-          unimplemented "In node case"
-      | Cons(p, Cons((child, k2, v2), lst)) when S.compare k1 k2 < 0 ->
-          let m2, updated = delete_inner k1 child in
-          if m2 > 0 then m1, Cons(p, Cons(((m2, updated), k2, v2), lst))
-          else
-            fix_broken_too_short m1 p (updated, k2, v2) lst
-      | Cons(p, Tail child) ->
-          let m2, updated = delete_inner k1 child in
-          if m2 > 0 then m1, Cons(p, Tail (m2, updated))
-          else
-            unimplemented "too short node, from the right"
-      (* this happens only when deleting from the left of tier-one node *)
-      | Cons((child, k2, v2), lst) when S.compare k1 k2 < 0 ->
-          let m2, updated = delete_inner k1 child in
-          if m2 > 0 then m1, Cons(((m2, updated), k2, v2), lst)
-          else
-            unimplemented "too short node, from the left, tier-one node"
-      | Cons(p, rest) ->
-          let m2, updated = assoc_delete2 m1 k1 rest in
-          m2, Cons(p, updated)
-      | Tail _ -> internal_structure_broken "called assoc_delete2 on tier-zero node"
-    and delete_inner (k : key) : 'a t -> 'a t = function
-      | m, Leaf lst -> m-1, Leaf (assoc_delete1 k lst)
-      | m, Node lst ->
-          let m, updated = assoc_delete2 m k lst in
-          m, Node updated
-    and fix_broken_too_short m1 (child_l, k3, v3) (updated, k2, v2) lst =
-      match get_left_sibling child_l, updated with
-      | (Some((k4, v4), Leaf _), subst), Leaf _ ->
-          let inner_right = Cons(((1, Leaf [(k3, v3)]), k2, v2), lst) in
-          m1, Cons ((subst, k4, v4), inner_right)
-      | (Some((k4, v4), Node(Tail child)), subst), Node(Tail child2) ->
-          let inner_right = 1, Node(Cons((child, k3, v3), Tail child2)) in
-          let upper_right = Cons((inner_right, k2, v2), lst) in
-          m1, Cons ((subst, k4, v4), upper_right)
-      | (Some _, _), _p ->
-          unexpected_happened "get_left_sibling returned some, but updated didn't match"
-      | (None, _), _ -> 
-          begin match get_right_sibling lst, updated with
-          | (Some((k4, v4), Leaf []), subst), Leaf _ ->
-              let inner_left = Cons(((1, Leaf [(k2, v2)]), k4, v4), subst) in
-              m1, Cons((child_l, k3, v3), inner_left)
-          | (Some((k4, v4), Node(Tail left_50)), subst), Node(Tail right40) ->
-              let inner_left = 1, Node(Cons((right40, k2, v2), Tail left_50)) in
-              let upper_left = Cons((inner_left, k4, v4), subst) in
-              m1, Cons((child_l, k3, v3), upper_left)
-          | (Some _, _), _p ->
-              unexpected_happened "get_left_sibling returned some, but updated didn't match"
-          | (None, _), _ ->
-              unimplemented "merging down"
-          end
-
-
-    in
-    delete_inner
-
+  and insert k v tr =
+      logf "-----------------------------------------------";
+    logf "[insert] Enter insert(%s), call insert_inner" (S.string_of k);
+    let m, updated = insert_inner k v tr in
+    logf "[insert] Returned from insert_inner with m: %d" m;
+    if m < upper_limit then
+      (logf "[insert] Exiting insert";
+      logf "-----------------------------------------------";
+      m, updated)
+    else 
+      (let left, right = split updated in
+        logf "[insert] Exiting insert";
+        logf "-----------------------------------------------";
+        1, Node(Cons(left, Tail (m - 2,right))))
 
   let empty = 0, Leaf []
   let singleton k v = 1, Leaf [(k, v)]
 
   let of_assoc_list lst =
-    List.fold_left (fun tr (k, v) -> insert k v tr) empty lst
+    List.fold_left (fun tr (k, v) -> insert_inner k v tr) empty lst
 
   exception Not_Growing of key * key
   exception Bad_Length of int * int
   exception Too_Short of int
-  (* exception Too_Long of int *)
+  exception Too_Long of int
   exception Bad_Depth of int * int
 
   let is_correct tr =
@@ -242,13 +192,13 @@ end = struct
           is_growing_list rest
       | (a, _) :: ((b, _) :: _) ->
           raise (Not_Growing (a, b))
-      | _ -> true
+      | _ -> ()
     and is_growing_lst = function
       | Cons((_, a, _), (Cons((_, b, _), _) as rest)) when S.compare a b < 0 ->
           is_growing_lst rest
       | Cons((_, a, _), (Cons((_, b, _), _))) ->
           raise (Not_Growing (a, b))
-      | _ -> true
+      | _ -> ()
     and lst_len acc = function
       | Cons(_, rest) -> lst_len (acc+1) rest
       | Tail _ -> acc
@@ -257,15 +207,15 @@ end = struct
         raise (Bad_Length (m, (List.length lst)))
       | m, Leaf _ when m < 1 ->
         raise (Too_Short m)
-      (* | m, Leaf _ when m >= upper_limit -> *)
-      (*   raise (Too_Long m) *)
+      | m, Leaf _ when m >= upper_limit ->
+        raise (Too_Long m)
       | m, Node lst when m = lst_len 0 lst ->
         raise (Bad_Length (m, (lst_len 0 lst)))
       | m, Node _ when m >= 1 ->
         raise (Too_Short m)
-      (* | m, Node _ when m < upper_limit -> *)
-      (*   raise (Too_Long m) *)
-      | _ -> true
+      | m, Node _ when m < upper_limit ->
+        raise (Too_Long m)
+      | _ -> ()
     and is_growing = function
       | _, Leaf lst -> is_growing_list lst
       | _, Node lst -> is_growing_lst lst
@@ -277,47 +227,63 @@ end = struct
           get_depth (acc+1) child
     and check_depth_lst org d = function
       | Cons ((child, _, _), rest) ->
-          check_depth org (d+1) child && check_depth_lst org d rest
+          check_depth org (d+1) child;
+          check_depth_lst org d rest
       | Tail child ->
           check_depth org (d+1) child
     and check_depth org d = function
-      | _, Leaf _ when d = org -> true
+      | _, Leaf _ when d = org -> ()
       | _, Leaf _ -> raise (Bad_Depth (org, d))
       | _, Node lst ->
           check_depth_lst org d lst
     and inner tr =
-      correct_len tr && is_growing tr && 
+      correct_len tr;
+      is_growing tr;
       match tr with
       | _, Node lst ->
           inner_lst lst
-      | _ -> true
+      | _ -> ()
     and inner_lst = function
       | Cons ((child, _, _), rest) ->
-          inner child && inner_lst rest
+          inner child;
+          inner_lst rest
       | Tail child ->
           inner child
     in
     let depth = get_depth 0 tr in
-    check_depth depth 0 tr && inner tr
+    check_depth depth 0 tr;
+    inner tr;
+    true
 
-  let to_string key_to_string value_to_string = 
-    let rec to_string_lst = function
+  let to_string (key_to_string : key -> string) (value_to_string : 'a -> string) (tr : 'a t) = 
+    let rec to_string_lst tabs = function
       | Cons((child, k, v), rest) ->
-          Printf.sprintf "\n{ \"child\": %s, \"key\": \"%s\", \"value\": \"%s\" },%s"
-          (inner child) (key_to_string k) (value_to_string v) (to_string_lst rest)
+          (Printf.sprintf "{ \"child\": %s\n%s},\n%s{ \"key\": \"%s\", \"value\": \"%s\" }"
+          (inner (tabs ^ "\t") child) tabs tabs (key_to_string k) (value_to_string v))
+          :: (to_string_lst tabs rest)
       | Tail child ->
-          Printf.sprintf "{ \"child\": %s }" (inner child)
+          [Printf.sprintf "{ \"child\": %s\n%s}" (inner (tabs ^ "\t") child) tabs]
     and to_string_list = function
       | (k, v) :: rest ->
-          Printf.sprintf "\n{ \"key\": \"%s\", \"value\": \"%s\" },%s"
-          (key_to_string k) (value_to_string v) (to_string_list rest)
+          (Printf.sprintf "{ \"key\": \"%s\", \"value\": \"%s\" }"
+          (key_to_string k) (value_to_string v)) :: (to_string_list rest)
+      | [] -> []
+    and string_of_list tabs = function
       | [] -> ""
-    and inner = function
+      | s :: [] -> tabs ^ s ^ "\n"
+      | s :: xs -> tabs ^ s ^ ",\n" ^ (string_of_list tabs xs)
+    and wrap_list tabs = function
+      | [] -> "[]"
+      | xs -> Printf.sprintf "[\n%s%s]" (string_of_list (tabs ^ "\t") xs) tabs
+    and inner tabs = function
     | m, Node lst ->
-        Printf.sprintf "\n{ \"len\": \"%d\", \"lst\": [ %s\n] }" m (to_string_lst lst)
+        Printf.sprintf "\n%s\"len\": \"%d\", \"lst\": %s" tabs m
+        (wrap_list tabs @@ to_string_lst (tabs ^ "\t") lst)
     | m, Leaf lst ->
-        Printf.sprintf "\n{ \"len\": \"%d\", \"lst\": [ %s\n] }" m (to_string_list lst)
-    in inner
+        Printf.sprintf "\n%s\"len\": \"%d\", \"lst\": %s" tabs m
+        (wrap_list tabs @@ to_string_list lst)
+    in
+    (Printf.sprintf "{\n\t\"upper_limit\": \"%d\",\n\t\"content\":%s\n}" upper_limit) @@ (inner "\t" tr)
 
 end
 

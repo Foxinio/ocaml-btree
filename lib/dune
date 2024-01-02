@@ -3,4 +3,4 @@
 
 (env
   (dev
-    (flags (:standard -w -67))))
+    (flags (:standard -w -67-32))))

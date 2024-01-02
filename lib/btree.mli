@@ -1,6 +1,7 @@
 module type OrderedEq = sig
   type t
   val compare : t -> t -> int
+  val string_of : t -> string
 end
 module type Numbered = sig
   val n : int
@@ -15,7 +16,6 @@ module Make(N : Numbered)
 
   val get    : key -> 'a t -> 'a
   val insert : key -> 'a -> 'a t -> 'a t
-  val delete : key -> 'a t -> 'a t
 
   val empty : 'a t
   val singleton :  key -> 'a ->'a t

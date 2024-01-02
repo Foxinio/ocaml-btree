@@ -4,6 +4,7 @@ open Btree_lib.Btree
 module IntOrderedEq = struct
   type t = int
   let compare a b = compare a b
+  let string_of = string_of_int
 end
 
 module MakeBasicTests(N : Numbered) = struct
