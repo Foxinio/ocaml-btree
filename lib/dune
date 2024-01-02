@@ -1,0 +1,6 @@
+(library
+ (name btree_lib))
+
+(env
+  (dev
+    (flags (:standard -w -67))))
