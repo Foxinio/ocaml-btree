@@ -1,5 +1,5 @@
 (library
   (name btree_tests)
-  (libraries btree_lib)
+  (libraries btree_lib common)
   (inline_tests)
   (preprocess (pps ppx_inline_test)))

@@ -8,6 +8,11 @@ module type Numbered = sig
 end
 
 
+
+exception Bad_Length of int * int
+exception Too_Short of int
+exception Too_Long of int
+exception Bad_Depth of int * int
 exception InternalStructureBroken of string
 exception UnexpectedHappened of string
 
@@ -15,6 +20,8 @@ module Make(N : Numbered)
             (S : OrderedEq) : sig
   type key = S.t
   type 'a t
+
+  exception Not_Growing of key * key
 
   val upper_limit : int
 
@@ -29,6 +36,7 @@ module Make(N : Numbered)
 
 end = struct
   type key = S.t
+  exception Not_Growing of key * key
   open Logf
 
   type 'a t = int * 'a node
@@ -178,17 +186,11 @@ end = struct
   let singleton k v = 1, Leaf [(k, v)]
 
   let of_assoc_list lst =
-    List.fold_left (fun tr (k, v) -> insert_inner k v tr) empty lst
-
-  exception Not_Growing of key * key
-  exception Bad_Length of int * int
-  exception Too_Short of int
-  exception Too_Long of int
-  exception Bad_Depth of int * int
+    List.fold_left (fun tr (k, v) -> insert k v tr) empty lst
 
   let is_correct tr =
     let rec is_growing_list = function
-      | (a, _) :: ((b, _) :: _) as rest when S.compare a b < 0 ->
+      | (a, _) :: ((b, _) :: _ as rest) when S.compare a b < 0 ->
           is_growing_list rest
       | (a, _) :: ((b, _) :: _) ->
           raise (Not_Growing (a, b))
@@ -203,17 +205,17 @@ end = struct
       | Cons(_, rest) -> lst_len (acc+1) rest
       | Tail _ -> acc
     and correct_len = function
-      | m, Leaf lst when m <> (List.length lst) ->
+        | m, Leaf lst when m <> (List.length lst) ->
         raise (Bad_Length (m, (List.length lst)))
       | m, Leaf _ when m < 1 ->
         raise (Too_Short m)
       | m, Leaf _ when m >= upper_limit ->
         raise (Too_Long m)
-      | m, Node lst when m = lst_len 0 lst ->
+      | m, Node lst when m <> lst_len 0 lst ->
         raise (Bad_Length (m, (lst_len 0 lst)))
-      | m, Node _ when m >= 1 ->
+      | m, Node _ when m < 1 ->
         raise (Too_Short m)
-      | m, Node _ when m < upper_limit ->
+      | m, Node _ when m >= upper_limit ->
         raise (Too_Long m)
       | _ -> ()
     and is_growing = function
