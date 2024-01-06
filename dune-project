@@ -5,22 +5,17 @@
 (generate_opam_files true)
 
 (source
- (github username/reponame))
+ (github Foxinio/ocaml-btree))
 
-(authors "Author Name")
+(authors "Szymon Jedras")
 
-(maintainers "Maintainer Name")
+(maintainers "Szymon Jedras")
 
-(license LICENSE)
-
-(documentation https://url/to/documentation)
+(license MIT LICENSE)
 
 (package
  (name btree)
- (synopsis "A short synopsis")
- (description "A longer description")
- (depends ocaml dune)
- (tags
-  (topics "to describe" your project)))
+ (synopsis "Immutable BTree")
+ (description "My humble implementation of Immutable b-trees in ocaml")
+ (depends ocaml dune))
 
-; See the complete stanza docs at https://dune.readthedocs.io/en/stable/dune-files.html#dune-project
