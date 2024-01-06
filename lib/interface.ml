@@ -2,7 +2,7 @@ include Signatures
 
 module Make(N : Numbered)
             (S : OrderedEq) : sig
-  type key
+  type key = S.t
   type 'a t
 
   exception Not_Growing of key * key
@@ -20,7 +20,7 @@ module Make(N : Numbered)
 
 end = struct
 
-  module Types : Sig = struct 
+  module Types = struct 
     type key = S.t
     let compare = S.compare
     let string_of = S.string_of

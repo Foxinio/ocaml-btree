@@ -3,6 +3,7 @@ open Signatures
 module Make(S : Sig) = struct
   open S
 
+  (** Throws in case of an error, otherwise returns true *)
   let is_correct tr =
     let rec is_growing_list = function
       | (a, _) :: ((b, _) :: _ as rest) when S.compare a b < 0 ->

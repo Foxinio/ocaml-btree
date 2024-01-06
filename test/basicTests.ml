@@ -1,10 +1,10 @@
 open Btree_lib
-open Btree_lib.Btree
+open Btree_lib.Interface
 open Common.Definitions
 
 
 module MakeBasicTests(N : Numbered) = struct
-  module IntBTree = Btree.Make(N)(IntOrderedEq)
+  module IntBTree = Interface.Make(N)(IntOrderedEq)
 
   let%test "Empty tree should raise Not_found when searching for a key" =
     try

@@ -1,4 +1,5 @@
 (library
+ (private_modules delete insert is_correct signatures to_string)
  (name btree_lib))
 
 (env

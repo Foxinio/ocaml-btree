@@ -1,4 +1,5 @@
 open Btree_lib
+open Btree_lib.Interface
 open Common
 
 
@@ -48,9 +49,9 @@ let _ =
       (List.for_all (fun (key, value) -> IntTree.get key tree = value) assoc_list)
       && IntTree.is_correct tree
     with
-    | Btree.Too_Long n ->
+    | Too_Long n ->
         raise (Error_on ("Too_Long(" ^ string_of_int n ^ ") [m:"^ string_of_int 3 ^"]: " ^ string_of_list l))
-    | Btree.InternalStructureBroken s ->
+    | InternalStructureBroken s ->
       raise (Error_on ("InternalStructureBroken(" ^ s ^ "): " ^ string_of_list l))
   in
   seq_for_all iterator @@ enumerate @@ Perm.permutations lst

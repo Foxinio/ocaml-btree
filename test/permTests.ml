@@ -1,10 +1,10 @@
 open Btree_lib
-open Btree_lib.Btree
+open Btree_lib.Interface
 open Common
 open Common.Definitions
 
 module MakePermTests(N : Numbered) = struct 
-  module IntBTree = Btree.Make(N)(IntOrderedEq)
+  module IntBTree = Interface.Make(N)(IntOrderedEq)
 
   let lst = [1;2;3;4;5;6;7]
 
@@ -39,9 +39,9 @@ module MakePermTests(N : Numbered) = struct
         (List.for_all (fun (key, value) -> IntBTree.get key tree = value) assoc_list)
         && IntBTree.is_correct tree
       with
-      | Btree.Too_Long n ->
+      | Too_Long n ->
           raise (Error_on ("Too_Long(" ^ string_of_int n ^ ") [m:"^ string_of_int N.n ^"]: " ^ string_of_list l))
-      | Btree.InternalStructureBroken s ->
+      | InternalStructureBroken s ->
         raise (Error_on ("InternalStructureBroken(" ^ s ^ "): " ^ string_of_list l))
     in
     seq_for_all iterator @@ Perm.permutations lst

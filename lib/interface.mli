@@ -17,7 +17,7 @@ exception UnexpectedHappened of string
 
 module Make(N : Numbered)
             (S : OrderedEq) : sig
-  type key
+  type key = S.t
   type 'a t
 
   exception Not_Growing of key * key

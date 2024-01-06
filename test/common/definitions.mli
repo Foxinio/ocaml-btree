@@ -1,4 +1,4 @@
-open Btree_lib.Btree
+open Btree_lib.Interface
 
 module IntOrderedEq : sig
   type t = int
