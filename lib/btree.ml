@@ -1,20 +1,4 @@
-module type OrderedEq = sig
-  type t
-  val compare : t -> t -> int
-  val string_of : t -> string
-end
-module type Numbered = sig
-  val n : int
-end
-
-
-
-exception Bad_Length of int * int
-exception Too_Short of int
-exception Too_Long of int
-exception Bad_Depth of int * int
-exception InternalStructureBroken of string
-exception UnexpectedHappened of string
+include Signatures
 
 module Make(N : Numbered)
             (S : OrderedEq) : sig
