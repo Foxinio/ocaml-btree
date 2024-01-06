@@ -4,7 +4,6 @@ open Common.Definitions
 
 
 module MakeBasicTests(N : Numbered) = struct
-
   module IntBTree = Btree.Make(N)(IntOrderedEq)
 
   let%test "Empty tree should raise Not_found when searching for a key" =
@@ -34,7 +33,6 @@ module MakeBasicTests(N : Numbered) = struct
     let assoc_list = [(42, "Hello"); (24, "World"); (10, "BTree")] in
     let tree = IntBTree.of_assoc_list assoc_list in
     List.for_all (fun (key, value) -> IntBTree.get key tree = value) assoc_list
-
 end
 
 

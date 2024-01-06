@@ -4,7 +4,6 @@ open Common
 open Common.Definitions
 
 module MakePermTests(N : Numbered) = struct 
-
   module IntBTree = Btree.Make(N)(IntOrderedEq)
 
   let lst = [1;2;3;4;5;6;7]
@@ -37,9 +36,6 @@ module MakePermTests(N : Numbered) = struct
       try
         let assoc_list = make_assoc_list l in
         let tree = IntBTree.of_assoc_list assoc_list in
-        let handle = open_out ("/home/foxinio/Work/Paused/btree/out/tree_m"^string_of_int N.n^"_"^string_of_list l^".out") in
-        Printf.fprintf handle "%s" (IntBTree.to_string string_of_int string_of_int tree);
-        close_out_noerr handle;
         (List.for_all (fun (key, value) -> IntBTree.get key tree = value) assoc_list)
         && IntBTree.is_correct tree
       with
@@ -49,6 +45,5 @@ module MakePermTests(N : Numbered) = struct
         raise (Error_on ("InternalStructureBroken(" ^ s ^ "): " ^ string_of_list l))
     in
     seq_for_all iterator @@ Perm.permutations lst
-
 end
 

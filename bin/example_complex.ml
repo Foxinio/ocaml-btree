@@ -53,6 +53,6 @@ let _ =
     | Btree.InternalStructureBroken s ->
       raise (Error_on ("InternalStructureBroken(" ^ s ^ "): " ^ string_of_list l))
   in
-  seq_for_all iterator @@ EnumerateSeq.enumerate @@ Perm.permutations lst
+  seq_for_all iterator @@ enumerate @@ Perm.permutations lst
 
 
